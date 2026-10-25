@@ -1,0 +1,24 @@
+# ---------- Terraform ----------
+# Provider downloads (recreated by `terraform init`)
+.terraform/
+# State: can contain secrets; moves to S3 in the next step. NEVER commit.
+*.tfstate
+*.tfstate.*
+# Variable values (your IP, later secrets). Values come from CI variables instead.
+*.tfvars
+crash.log
+# NOTE: .terraform.lock.hcl is intentionally NOT ignored: commit it so
+# CI uses exactly the same provider versions as your laptop.
+
+# ---------- Build outputs (CI builds these fresh) ----------
+lambda/bootstrap
+lambda/lambda.zip
+*.exe
+
+# ---------- Local test data ----------
+sample.jsonl
+
+# ---------- Editors / OS ----------
+.vscode/
+.idea/
+Thumbs.db

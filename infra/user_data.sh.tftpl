@@ -1,0 +1,41 @@
+#!/bin/bash
+# Runs once at first boot. Log: /var/log/cloud-init-output.log
+set -euxo pipefail
+
+# 1. Docker + Compose plugin
+dnf install -y docker
+systemctl enable --now docker
+usermod -aG docker ec2-user
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+mkdir -p /opt/netflow/flink-lib
+cd /opt/netflow
+
+# 2. Private IP (IMDSv2) -> Kafka advertises this address to clients in the VPC
+TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+PRIVATE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
+echo "PRIVATE_IP=$PRIVATE_IP" > .env
+
+# 3. Flink connector JARs (Kafka source, JDBC sink, Postgres driver)
+MAVEN=https://repo1.maven.org/maven2
+curl -fsSL -o flink-lib/flink-sql-connector-kafka.jar \
+  $MAVEN/org/apache/flink/flink-sql-connector-kafka/3.2.0-1.19/flink-sql-connector-kafka-3.2.0-1.19.jar
+curl -fsSL -o flink-lib/flink-connector-jdbc.jar \
+  $MAVEN/org/apache/flink/flink-connector-jdbc/3.2.0-1.19/flink-connector-jdbc-3.2.0-1.19.jar
+curl -fsSL -o flink-lib/postgresql.jar \
+  $MAVEN/org/postgresql/postgresql/42.7.4/postgresql-42.7.4.jar
+
+# 4. Compose file and Postgres schema (inserted by Terraform)
+cat > docker-compose.yml <<'EOF'
+${compose}
+EOF
+
+cat > init.sql <<'EOF'
+${init_sql}
+EOF
+
+# 5. Start everything
+docker compose up -d
